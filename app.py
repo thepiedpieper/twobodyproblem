@@ -93,18 +93,18 @@ with st.sidebar:
                                 pass
                                 
                             univ_id = database.execute_query(
-                                "INSERT INTO Universities (name, city, country, lat, lon, cat_friendly_rating) VALUES (?, ?, ?, ?, ?, ?)",
+                                "INSERT INTO Universities (name, city, country, lat, lon, cat_friendly_rating) VALUES (%s, %s, %s, %s, %s, %s)",
                                 (data['university_name'], data['city'], data['country'], data['lat'], data['lon'], data['cat_friendly_rating'])
                             )
                         else:
                             univ_id = int(univ_df.iloc[0]['id'])
                             
                         # Insert position if not exists
-                        pos_df = database.fetch_data("SELECT id FROM Positions WHERE university_id = ? AND pi_name = ?", (univ_id, data['pi_name']))
+                        pos_df = database.fetch_data("SELECT id FROM Positions WHERE university_id = %s AND pi_name = %s", (univ_id, data['pi_name']))
                         if pos_df.empty:
                             database.execute_query(
                                 '''INSERT INTO Positions (university_id, track, department, pi_name, difficulty_tier, deadline_date, core_domain, model_system, link, vacancy_status, acceptance_rate, pi_research_abstract)
-                                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)''',
                                 (univ_id, data['track'], data['department'], data['pi_name'], data['difficulty_tier'], '2026-12-01', data['core_domain'], data['model_system'], data['link'], data['vacancy_status'], data['acceptance_rate'], data.get('pi_research_abstract', ''))
                             )
                     st.success(f"Successfully discovered and saved {len(scraped_data)} labs in {discover_country}!")
@@ -155,14 +155,14 @@ with st.sidebar:
                     pass
                     
                 univ_id = database.execute_query(
-                    "INSERT INTO Universities (name, city, country, lat, lon, cat_friendly_rating) VALUES (?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO Universities (name, city, country, lat, lon, cat_friendly_rating) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
                     (univ_name, city, country, float(lat), float(lon), int(cat_rating))
                 )
             else:
                 univ_id = int(univ_df.iloc[0]['id'])
                 
             database.execute_query(
-                "INSERT INTO Positions (university_id, track, department, pi_name, deadline_date, pi_research_abstract) VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO Positions (university_id, track, department, pi_name, deadline_date, pi_research_abstract) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
                 (univ_id, track, dept, pi_name, deadline, abstract)
             )
             st.success(f"Added {pi_name} at {univ_name} (Track {track})!")
