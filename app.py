@@ -36,6 +36,28 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# --- PASSWORD PROTECTION ---
+def check_password():
+    """Returns `True` if the user had the correct password."""
+    
+    def password_entered():
+        if st.session_state["password"] == st.secrets.get("APP_PASSWORD", "phd_secure"):
+            st.session_state["password_correct"] = True
+            del st.session_state["password"]  # Don't store password
+        else:
+            st.session_state["password_correct"] = False
+
+    if st.session_state.get("password_correct", False):
+        return True
+
+    st.text_input("Enter Password to access the Weaver", type="password", on_change=password_entered, key="password")
+    if "password_correct" in st.session_state:
+        st.error("😕 Password incorrect")
+    return False
+
+if not check_password():
+    st.stop()  # Stop rendering the rest of the app
+
 # --- SIDEBAR ---
 with st.sidebar:
     st.title("🧲 Two Body Problem")
@@ -79,7 +101,7 @@ with st.sidebar:
                     status_text.text("Saving to database...")
                     for data in scraped_data:
                         # Check if univ exists
-                        univ_df = database.fetch_data("SELECT id FROM Universities WHERE name = ?", (data['university_name'],))
+                        univ_df = database.fetch_data("SELECT id FROM Universities WHERE name = %s", (data['university_name'],))
                         if univ_df.empty:
                             from geopy.geocoders import Nominatim
                             geolocator = Nominatim(user_agent="twobody")
@@ -103,9 +125,9 @@ with st.sidebar:
                         pos_df = database.fetch_data("SELECT id FROM Positions WHERE university_id = %s AND pi_name = %s", (univ_id, data['pi_name']))
                         if pos_df.empty:
                             database.execute_query(
-                                '''INSERT INTO Positions (university_id, track, department, pi_name, difficulty_tier, deadline_date, core_domain, model_system, link, vacancy_status, acceptance_rate, pi_research_abstract)
-                                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)''',
-                                (univ_id, data['track'], data['department'], data['pi_name'], data['difficulty_tier'], '2026-12-01', data['core_domain'], data['model_system'], data['link'], data['vacancy_status'], data['acceptance_rate'], data.get('pi_research_abstract', ''))
+                                '''INSERT INTO Positions (university_id, track, department, pi_name, difficulty_tier, deadline_date, core_domain, model_system, link, vacancy_status, acceptance_rate, pi_research_abstract, fellowship_options)
+                                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)''',
+                                (univ_id, data['track'], data['department'], data['pi_name'], data['difficulty_tier'], '2026-12-01', data['core_domain'], data['model_system'], data['link'], data['vacancy_status'], data['acceptance_rate'], data.get('pi_research_abstract', ''), data.get('fellowship_options', 'N/A'))
                             )
                     st.success(f"Successfully discovered and saved {len(scraped_data)} labs in {discover_country}!")
             except Exception as e:
@@ -138,10 +160,11 @@ with st.sidebar:
         pi_name = extract(r"PI Name:\s*(.*)", raw_text, "")
         deadline = extract(r"Deadline:\s*(.*)", raw_text, "")
         abstract = extract(r"Abstract:\s*(.*)", raw_text, "")
+        fellowships = extract(r"Fellowships:\s*(.*)", raw_text, "N/A")
         
         try:
             # Check if university exists
-            univ_df = database.fetch_data("SELECT id FROM Universities WHERE name = ?", (univ_name,))
+            univ_df = database.fetch_data("SELECT id FROM Universities WHERE name = %s", (univ_name,))
             if univ_df.empty:
                 from geopy.geocoders import Nominatim
                 geolocator = Nominatim(user_agent="twobody")
@@ -162,8 +185,8 @@ with st.sidebar:
                 univ_id = int(univ_df.iloc[0]['id'])
                 
             database.execute_query(
-                "INSERT INTO Positions (university_id, track, department, pi_name, deadline_date, pi_research_abstract) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
-                (univ_id, track, dept, pi_name, deadline, abstract)
+                "INSERT INTO Positions (university_id, track, department, pi_name, deadline_date, pi_research_abstract, fellowship_options) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                (univ_id, track, dept, pi_name, deadline, abstract, fellowships)
             )
             st.success(f"Added {pi_name} at {univ_name} (Track {track})!")
         except Exception as e:
@@ -171,7 +194,7 @@ with st.sidebar:
 
 # --- DATA FETCHING ---
 query_positions = '''
-    SELECT p.id as pos_id, p.track, p.department, p.pi_name, p.difficulty_tier, p.deadline_date, p.core_domain, p.model_system, p.link, p.vacancy_status, p.acceptance_rate, p.pi_research_abstract,
+    SELECT p.id as pos_id, p.track, p.department, p.pi_name, p.difficulty_tier, p.deadline_date, p.core_domain, p.model_system, p.link, p.vacancy_status, p.acceptance_rate, p.pi_research_abstract, p.fellowship_options,
            u.name, u.city, u.country, u.lat, u.lon, u.cat_friendly_rating, u.rental_notes
     FROM Positions p
     JOIN Universities u ON p.university_id = u.id
@@ -275,6 +298,10 @@ with tab1:
                     abstract = row['pi_research_abstract']
                     if pd.notna(abstract) and str(abstract).strip().lower() != 'nan':
                         st.write(f"*{abstract}*")
+                        
+                    fellowships = row.get('fellowship_options')
+                    if pd.notna(fellowships) and str(fellowships).strip().lower() not in ['nan', 'n/a', 'none']:
+                        st.info(f"💰 **Fellowships:** {fellowships}")
                         
                     link = row['link']
                     if pd.notna(link) and str(link).strip().lower() != 'nan':

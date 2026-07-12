@@ -39,6 +39,7 @@ def discover_labs(location, track_a_topics, track_b_topics, api_key, progress_ca
     - "vacancy_status": string ("Open" or "Unknown")
     - "difficulty_tier": string ("Match", "Reach", or "Safety")
     - "acceptance_rate": string (e.g. "15%")
+    - "fellowship_options": string (Identify 1-2 known fellowships for this country/lab, e.g. "Marie Curie, DAAD", or "NSF GRFP", or "N/A" if unknown)
     """
     
     if progress_callback:
